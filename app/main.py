@@ -2,9 +2,22 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 import models, schemas, crud
 from database import SessionLocal, engine, Base
+from fastapi.responses import JSONResponse
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI()
+@app.get("/")
+def root():
+    return JSONResponse(content={
+        "message": "Welcome to the Orders & Inventory API!",
+        "endpoints": [
+            {"path": "/products/", "methods": ["GET", "POST"]},
+            {"path": "/products/{product_id}", "methods": ["GET", "PUT", "DELETE"]},
+            {"path": "/orders/", "methods": ["GET", "POST"]},
+            {"path": "/orders/{order_id}", "methods": ["GET", "PUT", "DELETE"]}
+        ],
+        "docs": "Visit /docs for interactive API documentation and to try all endpoints."
+    })
 
 def get_db():
     db = SessionLocal()
