@@ -57,7 +57,36 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
 
 @app.post("/orders/", response_model=schemas.Order)
 def create_order(order: schemas.OrderCreate, db: Session = Depends(get_db)):
-    return crud.create_order(db, order)
+    product = crud.get_product(db, order.product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if product.stock < order.quantity:
+        raise HTTPException(status_code=400, detail="Not enough stock")
+    # Only reduce stock if order is immediately paid
+    if order.status == "paid":
+        product.stock -= order.quantity
+        db.commit()
+        db.refresh(product)
+    db_order = crud.create_order(db, order)
+    return db_order
+# Add webhook endpoint to mark order as paid and update product stock
+@app.post("/orders/{order_id}/mark_paid")
+def mark_order_paid(order_id: int, db: Session = Depends(get_db)):
+    db_order = crud.get_order(db, order_id)
+    if not db_order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if db_order.status != "paid":
+        product = crud.get_product(db, db_order.product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+        if product.stock < db_order.quantity:
+            raise HTTPException(status_code=400, detail="Not enough stock")
+        product.stock -= db_order.quantity
+        db_order.status = "paid"
+        db.commit()
+        db.refresh(product)
+        db.refresh(db_order)
+    return {"ok": True, "order_id": order_id, "status": db_order.status}
 
 @app.get("/orders/", response_model=list[schemas.Order])
 def list_orders(db: Session = Depends(get_db)):
